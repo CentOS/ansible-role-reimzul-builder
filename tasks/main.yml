@@ -1,0 +1,137 @@
+- name: Ensuring some needed packages are installed
+  yum:
+    name: "{{ item }}"
+    state: installed
+  with_items:
+    - mock
+    - rpm-build
+    - git
+    - stunnel
+    - python-beanstalkc
+    - PyYAML 
+
+- name: Configuring stunnel
+  template:
+    src: "templates/{{ item }}.j2"
+    dest: "/etc/stunnel/{{ item }}"
+    owner: root
+    group: root
+    mode: 0600
+  with_items:
+    - stunnel.conf
+    - reimzul-client.psk
+  notify: restart_stunnel
+
+- name: Adding stunnel to systemd
+  copy:
+    src: files/stunnel.service
+    dest: /etc/systemd/system/stunnel.service
+    owner: root
+  register: stunnel_systemd
+
+- name: Reloading systemd if needed
+  shell: /usr/bin/systemctl daemon-reload
+  when: stunnel_systemd is changed
+    
+- name: Ensuring stunnel is enabled and started
+  service: 
+    name: stunnel 
+    state: started 
+    enabled: yes
+    
+- name: Ensuring reimzul user exists
+  user:
+    name: reimzul
+    state: present
+    comment: "Reimzul Build System"
+    shell: /bin/bash
+    append: yes
+    groups: mock
+    
+
+- name: Ensuring incoming directory exists
+  file:
+    path: "{{ reimzul_build_dir }}"
+    state: directory
+    owner: reimzul
+    group: reimzul
+  tags:
+    - git
+
+- name: Ensuring reimzul can log to file
+  file:
+    path: /var/log/reimzul
+    state: directory
+    owner: reimzul
+    group: reimzul
+  tags:
+    - git
+
+- name: Cloning code
+  git:
+    repo: http://localhost:11080/git/reimzul.git
+    dest: "{{ reimzul_build_dir }}/code"
+    clone: yes
+  become_user: reimzul  
+  tags:
+    - git
+
+- name: Cloning mock configs
+  git:
+    repo: http://localhost:11080/git/bld-seven.git
+    dest: "{{ reimzul_build_dir }}/mock_configs/"
+    clone: yes
+  become_user: reimzul  
+  tags:
+    - git
+
+- name: Adding reimzul-worker to systemd
+  copy:
+    src: files/reimzul-worker@.service
+    dest: /etc/systemd/system/reimzul-worker@.service
+    owner: root
+  register: reimzul_worker_systemd
+  tags:
+    - systemd
+
+- name: Reloading systemd if needed
+  shell: /usr/bin/systemctl daemon-reload
+  when: reimzul_worker_systemd is changed
+  tags:
+    - systemd
+
+- name: Ensuring reimzul worker[s] is/are started
+  service:
+    name: "reimzul-worker@{{ item }}"
+    state: started
+    enabled: True
+  with_sequence: count={{ reimzul_workers_number }}
+  tags:
+    - systemd
+
+- name: Specific buildtools repo if needed
+  template:
+    src: buildtools.repo
+    dest: /etc/yum.repos.d/buildtools.repo
+  when: buildtools_repo
+  tags:
+    - buildtools
+
+- name: Ensuring we have now up2date pkgs
+  yum:
+    name: '*'
+    state: latest
+  when: buildtools_repo  
+  tags:
+    - buildtools
+- name: Ensuring we have DNF
+  yum:
+    name: "{{ item }}"
+    state: latest
+  with_items:
+    - dnf
+    - dnf-plugins-core
+  when: buildtools_repo  
+  tags:
+    - buildtools
+

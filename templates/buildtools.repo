@@ -1,0 +1,5 @@
+[c7-buildtools]
+name=c7-buildtools
+baseurl=http://localhost:11081/bstore/repo/c7-buildtools.$basearch/
+enabled=1
+gpgcheck=0

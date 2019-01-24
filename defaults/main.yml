@@ -1,0 +1,10 @@
+# reimzul FQDN host (beanstalkd host)
+reimzul_controller: reimzul.domain.com
+reimzul_bstore: store.domain.com
+reimzul_build_dir: /srv/reimzul
+
+# Numbers of reimzul workers to start with systemd
+reimzul_workers_number: 1
+
+# If we need newer mock/rpm/dnf
+buildtools_repo: False
